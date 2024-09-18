@@ -1,100 +1,75 @@
 import os
 import json
 from natsort import natsorted
-from llava.eval.run_vila import main
-from llava.model.builder import load_pretrained_model
+from llava.eval.run_vila import main, load_model_once
 import torch
-from transformers import AutoConfig
-from torch.nn.parallel import DistributedDataParallel as DDP
-import torch.distributed as dist
-import torch.multiprocessing as mp
 
 base_folder = '/kaggle/input/xcvbxcvxcv'
 output_folder = '/kaggle/working/'
 model_path = 'Efficient-Large-Model/Llama-3-VILA1.5-8b-Fix'
 conv_mode = 'llama_3'
 query = '<image>\\n captioning this image for retrieval text using sbert.'
-batch_size = 2  # Process two images at a time, one per GPU
+batch_size = 32
 
-def setup(rank, world_size):
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+# Set device to CUDA if available
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def cleanup():
-    dist.destroy_process_group()
+# Load model
+tokenizer, model, image_processor = load_model_once(model_path)
 
-def load_model_on_gpu(rank):
-    config = AutoConfig.from_pretrained(model_path)
-    config.use_cache = False  # Disable KV cache to save memory
-    
-    # Load the model on the specific GPU
-    tokenizer, model, image_processor, _ = load_pretrained_model(
-        model_path,
-        None,
-        device_map=f"cuda:{rank}",
-        torch_dtype=torch.float16,
-        use_gradient_checkpointing=True,
-    )
-    
-    model = DDP(model, device_ids=[rank])
-    return tokenizer, model, image_processor
+# Wrap model with DataParallel for multi-GPU usage
+# Ensure the model is on the correct device
+model = torch.nn.DataParallel(model).to(device)
 
-def process_image(rank, world_size, image_path):
-    setup(rank, world_size)
-    tokenizer, model, image_processor = load_model_on_gpu(rank)
-    
-    with torch.no_grad():
-        output_text = main(
-            model_path=None,
-            image_file=image_path,
-            query=query,
-            conv_mode=conv_mode,
-            tokenizer=tokenizer, 
-            model=model, 
-            image_processor=image_processor
-        )
-    
-    cleanup()
-    return output_text.strip() if output_text else None
+# Check which GPU the model is on
+print(f'Model is loaded on device: {next(model.parameters()).device}')
 
-def process_subfolder(subfolder):
+subfolders = natsorted(os.listdir(base_folder))
+id = 0
+
+for subfolder in subfolders:
     subfolder_path = os.path.join(base_folder, subfolder)
-    subfolder_results = {}
-    image_files = natsorted(os.listdir(subfolder_path))
-    
-    for i in range(0, len(image_files), batch_size):
-        batch = image_files[i:i+batch_size]
-        image_paths = [os.path.join(subfolder_path, img) for img in batch]
-        
-        # Process two images in parallel, one on each GPU
-        outputs = mp.spawn(
-            process_image,
-            args=(2, image_paths[0]),
-            nprocs=min(2, len(image_paths)),
-            join=True
-        )
-        
-        for j, output_text in enumerate(outputs):
-            if output_text:
-                subfolder_results[f'{i+j}'] = output_text
-                print(f"Processed image {i+j+1}/{len(image_files)}: {batch[j]}")
+
+    if os.path.isdir(subfolder_path):
+        subfolder_results = {}
+        image_files = natsorted(os.listdir(subfolder_path))
+
+        for i in range(0, len(image_files), batch_size):
+            batch = image_files[i:i + batch_size]  # Process images in batches
+            batch_results = {}
+
+            for image_file in batch:
+                image_path = os.path.join(subfolder_path, image_file)
+
+                # Ensure we're not using gradients for inference
+                with torch.no_grad():
+                    output_text = main(
+                        model_path=model_path,
+                        image_file=image_path,
+                        query=query,
+                        conv_mode=conv_mode,
+                        tokenizer=tokenizer, 
+                        model=model, 
+                        image_processor=image_processor
+                    )
+
+                if output_text:
+                    batch_results[f'{id}'] = output_text.strip()
+                    print(batch_results[f'{id}'])
+                    id += 1
+                else:
+                    print(f"Warning: No output for image {image_file}")
+
+            # Save batch results to a JSON file
+            subfolder_json_path = os.path.join(output_folder, f'{subfolder}.json')
+            if os.path.exists(subfolder_json_path):
+                # Load existing results and append new results
+                with open(subfolder_json_path, 'r') as json_file:
+                    existing_results = json.load(json_file)
+                existing_results.update(batch_results)
+                with open(subfolder_json_path, 'w') as json_file:
+                    json.dump(existing_results, json_file, ensure_ascii=False, indent=4)
             else:
-                print(f"Warning: No output for image {batch[j]}")
-    
-    json_file_path = os.path.join(output_folder, f'{subfolder}.json')
-    with open(json_file_path, 'w') as json_file:
-        json.dump(subfolder_results, json_file, ensure_ascii=False, indent=4)
-
-if __name__ == "__main__":
-    print("Starting processing...")
-    
-    subfolders = natsorted(os.listdir(base_folder))
-    
-    for subfolder in subfolders:
-        if os.path.isdir(os.path.join(base_folder, subfolder)):
-            print(f"Processing subfolder: {subfolder}")
-            process_subfolder(subfolder)
-            print(f"Finished processing subfolder: {subfolder}")
-
-    print("All processing completed.")
+                # Create a new JSON file with batch results
+                with open(subfolder_json_path, 'w') as json_file:
+                    json.dump(batch_results, json_file, ensure_ascii=False, indent=4)
