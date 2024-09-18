@@ -11,9 +11,17 @@ conv_mode = 'llama_3'
 query = '<image>\\n captioning this image for retrieval text using sbert.'
 batch_size = 32
 
-# Load the model and wrap with DataParallel for multi-GPU use
+# Set device to CUDA if available
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# Load model
 tokenizer, model, image_processor = load_model_once(model_path)
+
+# Wrap model with DataParallel for multi-GPU usage
 model = torch.nn.DataParallel(model).to(device)
+
+# Ensure the model is on the correct device
+print(f'Model is loaded on device: {next(model.parameters()).device}')
 subfolders = natsorted(os.listdir(base_folder))
 id = 0
 
