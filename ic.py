@@ -9,7 +9,7 @@ output_folder = '/kaggle/working/'
 model_path = 'Efficient-Large-Model/Llama-3-VILA1.5-8b-Fix'
 conv_mode = 'llama_3'
 query = '<image>\\n captioning this image for retrieval text using sbert.'
-batch_size = 128
+batch_size = 32
 
 # Load the model and wrap with DataParallel for multi-GPU use
 tokenizer, model, image_processor = load_model_once(model_path)
