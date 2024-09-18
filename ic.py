@@ -13,10 +13,9 @@ batch_size = 32
 
 # Load the model and wrap with DataParallel for multi-GPU use
 tokenizer, model, image_processor = load_model_once(model_path)
-model = torch.nn.DataParallel(model)
-
+model = torch.nn.DataParallel(model).to(device)
 subfolders = natsorted(os.listdir(base_folder))
-id = 239956
+id = 0
 
 for subfolder in subfolders:
     subfolder_path = os.path.join(base_folder, subfolder)
