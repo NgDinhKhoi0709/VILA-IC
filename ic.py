@@ -4,8 +4,8 @@ from natsort import natsorted
 from llava.eval.run_vila import main, load_model_once
 import torch
 
-base_folder = '/mlcv2/WorkingSpace/Personal/khoind/Keyframe'
-output_folder = '/mlcv2/WorkingSpace/Personal/khoind/data/vila'
+base_folder = '/kaggle/input/xcvbxcvxcv'
+output_folder = '/kaggle/working/'
 model_path = 'Efficient-Large-Model/Llama-3-VILA1.5-8b-Fix'
 conv_mode = 'llama_3'
 query = '<image>\\n captioning this image for retrieval text using sbert.'
