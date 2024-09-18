@@ -81,14 +81,14 @@ def eval_model(model, tokenizer, image_processor, args):
     prompt = conv.get_prompt()
 
     images_tensor = process_images(images, image_processor, model.config).to(model.device, dtype=torch.float16)
-    input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).cuda()
+    input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to(model.device)
 
     stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
     keywords = [stop_str]
     stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
 
-    with torch.inference_mode():
-        output_ids = model.generate(
+    with torch.no_grad():
+        output_ids = model.module.generate(  # Use model.module to access the actual model
             input_ids,
             images=[images_tensor],
             do_sample=True if args.temperature > 0 else False,
@@ -112,6 +112,7 @@ def load_model_once(model_path):
     disable_torch_init()
     model_name = get_model_name_from_path(model_path)
     tokenizer, model, image_processor, _ = load_pretrained_model(model_path, model_name)
+    model = torch.nn.DataParallel(model).to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
     return tokenizer, model, image_processor
 
 
@@ -130,6 +131,5 @@ def main(model_path, image_file, query, conv_mode, tokenizer, model, image_proce
         num_beams=1,
         max_new_tokens=512
     )
-
 
     return eval_model(model, tokenizer, image_processor, args)
