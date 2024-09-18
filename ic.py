@@ -3,7 +3,7 @@ import json
 from natsort import natsorted
 from llava.eval.run_vila import main, load_model_once
 import torch
-base_folder = '/kaggle/input/xcvbxcvxcv'
+base_folder = "/kaggle/working/data"
 output_folder = '/kaggle/working/'
 model_path = 'Efficient-Large-Model/Llama-3-VILA1.5-8b-Fix'
 conv_mode = 'llama_3'
