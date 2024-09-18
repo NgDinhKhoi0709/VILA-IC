@@ -12,11 +12,11 @@ query = '<image>\\n captioning this image for retrieval text using sbert.'
 batch_size = 128
 
 # Load the model and wrap with DataParallel for multi-GPU use
-tokenizer, model, image_processor = load_model_once(model_path, conv_mode)
+tokenizer, model, image_processor = load_model_once(model_path)
 model = torch.nn.DataParallel(model)
 
 subfolders = natsorted(os.listdir(base_folder))
-id = 0
+id = 239956
 
 for subfolder in subfolders:
     subfolder_path = os.path.join(base_folder, subfolder)
