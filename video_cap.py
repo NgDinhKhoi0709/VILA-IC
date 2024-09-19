@@ -34,15 +34,15 @@ for subfolder in subfolders:
         for video_file in video_files:
             video_path = os.path.join(subfolder_path, video_file)
             with torch.no_grad():
-                # Sử dụng main() để xử lý video
                 output_text = main(
                     model_path=model_path,
-                    video_file=video_path,  # Tham số video_file để xử lý video
+                    image_file=None,  # Không sử dụng hình ảnh
+                    video_file=video_path,
                     query=query,
                     conv_mode=conv_mode,
                     tokenizer=tokenizer,
                     model=model,
-                    video_processor=video_processor
+                    image_processor=None  # Không sử dụng image_processor
                 )
 
             if output_text:
