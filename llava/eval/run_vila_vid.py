@@ -4,14 +4,16 @@ import torch
 from natsort import natsorted
 from tqdm import tqdm  # For progress bar
 
-# Define your video processing function
-def process_video(video_path, model_path, query, conv_mode, tokenizer, model, image_processor, num_frames):
+# Fixed model path
+MODEL_PATH = "Efficient-Large-Model/Llama-3-VILA1.5-8b-Fix"
+
+def process_video(video_path, query, conv_mode, tokenizer, model, image_processor, num_frames):
     # Use the eval_model function to get outputs
     from your_module import eval_model  # Make sure to replace 'your_module' with the actual module name
 
     # Process video and get the result
     output_text = eval_model(
-        model_path=model_path,
+        model_path=MODEL_PATH,
         video_file=video_path,
         query=query,
         conv_mode=conv_mode,
@@ -22,7 +24,7 @@ def process_video(video_path, model_path, query, conv_mode, tokenizer, model, im
     )
     return output_text
 
-def process_videos_in_subfolders(base_folder, model_path, query, conv_mode, tokenizer, model, image_processor, num_frames=6, batch_size=1):
+def process_videos_in_subfolders(base_folder, query, conv_mode, tokenizer, model, image_processor, num_frames=6, batch_size=1):
     # Iterate over each subfolder
     for subfolder in os.listdir(base_folder):
         subfolder_path = os.path.join(base_folder, subfolder)
@@ -43,7 +45,6 @@ def process_videos_in_subfolders(base_folder, model_path, query, conv_mode, toke
                         with torch.no_grad():
                             output_text = process_video(
                                 video_path=video_path,
-                                model_path=model_path,
                                 query=query,
                                 conv_mode=conv_mode,
                                 tokenizer=tokenizer,
@@ -67,13 +68,12 @@ def process_videos_in_subfolders(base_folder, model_path, query, conv_mode, toke
             print(f"Results saved to {output_file}")
 
 # Example usage
-# Replace with actual model setup and paths
+# Replace with actual paths and parameters
 if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-folder", type=str, required=True, help="Base folder containing subfolders with video files")
-    parser.add_argument("--model-path", type=str, required=True, help="Path to the model")
     parser.add_argument("--query", type=str, required=True, help="Query for the model")
     parser.add_argument("--conv-mode", type=str, required=True, help="Conversation mode for the model")
     parser.add_argument("--num-frames", type=int, default=6, help="Number of frames to extract from each video")
@@ -83,11 +83,10 @@ if __name__ == "__main__":
 
     # Set up model, tokenizer, and image processor
     from your_module import load_pretrained_model  # Make sure to replace 'your_module' with the actual module name
-    tokenizer, model, image_processor, context_len = load_pretrained_model(args.model_path)
+    tokenizer, model, image_processor, context_len = load_pretrained_model(MODEL_PATH)
 
     process_videos_in_subfolders(
         base_folder=args.base_folder,
-        model_path=args.model_path,
         query=args.query,
         conv_mode=args.conv_mode,
         tokenizer=tokenizer,
