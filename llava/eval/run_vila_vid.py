@@ -1,129 +1,98 @@
-import argparse
 import os
-import os.path as osp
-import re
-from io import BytesIO
-import requests
+import json
 import torch
-from PIL import Image
+from natsort import natsorted
+from tqdm import tqdm  # For progress bar
 
-from llava.constants import (
-    DEFAULT_IM_END_TOKEN,
-    DEFAULT_IM_START_TOKEN,
-    DEFAULT_IMAGE_TOKEN,
-    IMAGE_PLACEHOLDER,
-    IMAGE_TOKEN_INDEX,
-)
-from llava.conversation import SeparatorStyle, conv_templates
-from llava.mm_utils import KeywordsStoppingCriteria, get_model_name_from_path, process_images, tokenizer_image_token, opencv_extract_frames
-from llava.model.builder import load_pretrained_model
-from llava.utils import disable_torch_init
+# Define your video processing function
+def process_video(video_path, model_path, query, conv_mode, tokenizer, model, image_processor, num_frames):
+    # Use the eval_model function to get outputs
+    from your_module import eval_model  # Make sure to replace 'your_module' with the actual module name
 
-def image_parser(args):
-    out = args.image_file.split(args.sep)
-    return out
-
-def load_image(image_file):
-    if image_file.startswith("http") or image_file.startswith("https"):
-        print("downloading image from url", image_file)
-        response = requests.get(image_file)
-        image = Image.open(BytesIO(response.content)).convert("RGB")
-    else:
-        image = Image.open(image_file).convert("RGB")
-    return image
-
-def load_images(image_files):
-    out = []
-    for image_file in image_files:
-        image = load_image(image_file)
-        out.append(image)
-    return out
-
-def eval_model(model, tokenizer, image_processor, args):
-    if args.video_file is None:
-        image_files = image_parser(args)
-        images = load_images(image_files)
-    else:
-        if args.video_file.startswith("http") or args.video_file.startswith("https"):
-            print("downloading video from url", args.video_file)
-            response = requests.get(args.video_file)
-            video_file = BytesIO(response.content)
-        else:
-            assert osp.exists(args.video_file), "video file not found"
-            video_file = args.video_file
-
-        images, num_frames = opencv_extract_frames(video_file, args.num_video_frames)
-
-    qs = args.query
-    image_token_se = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN
-    if IMAGE_PLACEHOLDER in qs:
-        if model.config.mm_use_im_start_end:
-            qs = re.sub(IMAGE_PLACEHOLDER, image_token_se, qs)
-        else:
-            qs = re.sub(IMAGE_PLACEHOLDER, DEFAULT_IMAGE_TOKEN, qs)
-    else:
-        if DEFAULT_IMAGE_TOKEN not in qs:
-            print("no <image> tag found in input. Automatically append one at the beginning of text.")
-            if model.config.mm_use_im_start_end:
-                qs = (image_token_se + "\n") * len(images) + qs
-            else:
-                qs = (DEFAULT_IMAGE_TOKEN + "\n") * len(images) + qs
-    print("input: ", qs)
-
-    conv = conv_templates[args.conv_mode].copy()
-    conv.append_message(conv.roles[0], qs)
-    conv.append_message(conv.roles[1], None)
-    prompt = conv.get_prompt()
-
-    images_tensor = process_images(images, image_processor, model.config).to(model.device, dtype=torch.float16)
-    input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to(model.device)
-
-    stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
-    keywords = [stop_str]
-    stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
-
-    with torch.no_grad():
-        output_ids = model.module.generate(  # Use model.module to access the actual model
-            input_ids,
-            images=[images_tensor],
-            do_sample=True if args.temperature > 0 else False,
-            temperature=args.temperature,
-            top_p=args.top_p,
-            num_beams=args.num_beams,
-            max_new_tokens=args.max_new_tokens,
-            use_cache=True,
-            stopping_criteria=[stopping_criteria],
-        )
-
-    outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0]
-    outputs = outputs.strip()
-    if outputs.endswith(stop_str):
-        outputs = outputs[: -len(stop_str)]
-    outputs = outputs.strip()
-        
-    return outputs
-
-def load_model_once(model_path):
-    disable_torch_init()
-    model_name = get_model_name_from_path(model_path)
-    tokenizer, model, image_processor, _ = load_pretrained_model(model_path, model_name)
-    model = torch.nn.DataParallel(model).to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
-    return tokenizer, model, image_processor
-
-def main(model_path, image_file, video_file, query, conv_mode, tokenizer, model, image_processor):
-    args = argparse.Namespace(
-        model_path=model_path if model_path else "Efficient-Large-Model/VILA-2.7b",
-        model_base=None,
-        image_file=image_file,
-        video_file=video_file,
-        num_video_frames=6,
+    # Process video and get the result
+    output_text = eval_model(
+        model_path=model_path,
+        video_file=video_path,
         query=query,
         conv_mode=conv_mode,
-        sep=",",
-        temperature=0.2,
-        top_p=None,
-        num_beams=1,
-        max_new_tokens=512
+        tokenizer=tokenizer,
+        model=model,
+        image_processor=image_processor,
+        num_video_frames=num_frames
     )
+    return output_text
 
-    return eval_model(model, tokenizer, image_processor, args)
+def process_videos_in_subfolders(base_folder, model_path, query, conv_mode, tokenizer, model, image_processor, num_frames=6, batch_size=1):
+    # Iterate over each subfolder
+    for subfolder in os.listdir(base_folder):
+        subfolder_path = os.path.join(base_folder, subfolder)
+
+        if os.path.isdir(subfolder_path):
+            subfolder_results = {}
+            video_files = natsorted(os.listdir(subfolder_path))
+            id = 1  # Initialize the unique ID for results
+
+            for i in range(0, len(video_files), batch_size):
+                batch = video_files[i:i + batch_size]  # Process videos in batches
+                
+                for video_file in batch:
+                    if video_file.endswith(".mp4"):
+                        video_path = os.path.join(subfolder_path, video_file)
+                        
+                        # Process the video
+                        with torch.no_grad():
+                            output_text = process_video(
+                                video_path=video_path,
+                                model_path=model_path,
+                                query=query,
+                                conv_mode=conv_mode,
+                                tokenizer=tokenizer,
+                                model=model,
+                                image_processor=image_processor,
+                                num_frames=num_frames
+                            )
+
+                        # Save output with unique ID
+                        if output_text:
+                            subfolder_results[f'{id}'] = output_text.strip()
+                            print(f"ID: {id}, Output: {subfolder_results[f'{id}']}")
+                            id += 1
+                        else:
+                            print(f"Warning: No output for video {video_file}")
+
+            # Save results to a JSON file
+            output_file = os.path.join(base_folder, f"{subfolder}_results.json")
+            with open(output_file, 'w') as f:
+                json.dump(subfolder_results, f, indent=4)
+            print(f"Results saved to {output_file}")
+
+# Example usage
+# Replace with actual model setup and paths
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base-folder", type=str, required=True, help="Base folder containing subfolders with video files")
+    parser.add_argument("--model-path", type=str, required=True, help="Path to the model")
+    parser.add_argument("--query", type=str, required=True, help="Query for the model")
+    parser.add_argument("--conv-mode", type=str, required=True, help="Conversation mode for the model")
+    parser.add_argument("--num-frames", type=int, default=6, help="Number of frames to extract from each video")
+    parser.add_argument("--batch-size", type=int, default=1, help="Batch size for processing videos")
+
+    args = parser.parse_args()
+
+    # Set up model, tokenizer, and image processor
+    from your_module import load_pretrained_model  # Make sure to replace 'your_module' with the actual module name
+    tokenizer, model, image_processor, context_len = load_pretrained_model(args.model_path)
+
+    process_videos_in_subfolders(
+        base_folder=args.base_folder,
+        model_path=args.model_path,
+        query=args.query,
+        conv_mode=args.conv_mode,
+        tokenizer=tokenizer,
+        model=model,
+        image_processor=image_processor,
+        num_frames=args.num_frames,
+        batch_size=args.batch_size
+    )
