@@ -1,7 +1,7 @@
 import os
 import json
 from natsort import natsorted
-from llava.eval.run_vila import main, load_model_once
+from llava.eval.run_vila_cap import main, load_model_once
 import torch
 
 # Đường dẫn cơ sở và thư mục đầu ra
