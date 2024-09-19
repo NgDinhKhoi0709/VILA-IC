@@ -81,14 +81,14 @@ def eval_model(model, tokenizer, image_processor, args):
     prompt = conv.get_prompt()
 
     images_tensor = process_images(images, image_processor, model.config).to(model.device, dtype=torch.float16)
-    input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to(model.device)
+    input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).cuda()
 
     stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
     keywords = [stop_str]
     stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
 
-    with torch.no_grad():
-        output_ids = model.module.generate(  # Use model.module to access the actual model
+    with torch.inference_mode():
+        output_ids = model.generate(
             input_ids,
             images=[images_tensor],
             do_sample=True if args.temperature > 0 else False,
@@ -105,23 +105,22 @@ def eval_model(model, tokenizer, image_processor, args):
     if outputs.endswith(stop_str):
         outputs = outputs[: -len(stop_str)]
     outputs = outputs.strip()
-        
+
     return outputs
 
-def load_model_once(model_path):
+def load_model_once(model_path, conv_mode):
     disable_torch_init()
     model_name = get_model_name_from_path(model_path)
-    tokenizer, model, image_processor, _ = load_pretrained_model(model_path, model_name)
-    model = torch.nn.DataParallel(model).to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+    tokenizer, model, image_processor, context_len = load_pretrained_model(model_path, model_name)
     return tokenizer, model, image_processor
 
 
-def main(model_path, image_file, query, conv_mode, tokenizer, model, image_processor):
+def main(model_path, video_file, query, conv_mode, tokenizer, model, image_processor):
     args = argparse.Namespace(
         model_path=model_path if model_path else "Efficient-Large-Model/VILA-2.7b",
         model_base=None,
-        image_file=image_file,
-        video_file=None,
+        image_file=None,
+        video_file=video_file,
         num_video_frames=6,
         query=query,
         conv_mode=conv_mode,
@@ -131,5 +130,6 @@ def main(model_path, image_file, query, conv_mode, tokenizer, model, image_proce
         num_beams=1,
         max_new_tokens=512
     )
+
 
     return eval_model(model, tokenizer, image_processor, args)
