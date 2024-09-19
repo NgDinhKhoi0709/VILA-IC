@@ -45,7 +45,8 @@ for subfolder in subfolders:
             else:
                 print(f"Warning: No output for image {image_file}")
         
-        # Save the result of the subfolder to a separate JSON file
+        
         json_file_path = os.path.join(output_folder, f'{subfolder}.json')
+        os.makedirs(json_file_path, exist_ok=True)
         with open(json_file_path, 'w') as json_file:
             json.dump(subfolder_results, json_file, ensure_ascii=False, indent=4)
