@@ -3,8 +3,8 @@ import json
 from natsort import natsorted
 from llava.eval.run_vila_ic import main, load_model_once
 
-base_folder = '/mlcv2/Datasets/HCMAI24/keyframes'
-output_folder = '/mlcv2/WorkingSpace/Personal/khoind/data/vila'
+base_folder = '/mnt/keyframe'
+output_folder = '/mnt/vila_ic'
 model_path = 'Efficient-Large-Model/Llama-3-VILA1.5-8b-Fix'
 conv_mode = 'llama_3'
 query = '<image>\\n describe this image with details.'
