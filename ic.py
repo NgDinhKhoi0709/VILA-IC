@@ -3,10 +3,10 @@ import json
 from natsort import natsorted
 from llava.eval.run_vila_ic import main, load_model_once
 
-base_folder = '/mnt/keyframe'
-output_folder = '/mnt/vila_ic'
-model_path = 'Efficient-Large-Model/Llama-3-VILA1.5-8b-Fix'
-conv_mode = 'llama_3'
+base_folder = '/kaggle/input/dcxvxcvxc'
+output_folder = '/kaggle/working'
+model_path = 'Efficient-Large-Model/VILA1.5-3b'
+conv_mode = 'vicuna_v1'
 query = '<image>\\n describe this image with details.'
 
 tokenizer, model, image_processor = load_model_once(model_path, conv_mode)
