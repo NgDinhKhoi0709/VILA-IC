@@ -5,7 +5,7 @@ from llava.eval.run_vila_vid import main, load_model_once
 import torch
 
 # Đường dẫn cơ sở và thư mục đầu ra
-base_folder = "/kaggle/input/videosac"
+base_folder = "/kaggle/input/festival-vid"
 output_folder = '/kaggle/working/'
 
 # Đường dẫn mô hình và cấu hình inference
