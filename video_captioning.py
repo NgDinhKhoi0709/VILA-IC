@@ -7,7 +7,7 @@ base_folder = '/kaggle/input/festival-fol'
 output_folder = '/kaggle/working/output'
 model_path = 'Efficient-Large-Model/VILA1.5-3b'
 conv_mode = 'vicuna_v1'
-query = "<video>\n Please describe the video in detail, focusing on the setting, activities, traditional costumes, decorations, cultural symbols, and any performances or rituals that may indicate a festival or celebration."
+query = "<video>\n Please describe the video in detail, focusing on the setting, activities, traditional costumes, decorations, cultural symbols, and any performances or rituals that indicate a festival or celebration. Pay special attention to the traditional costumes, describing their colors, patterns, materials, shapes, and any accessories or significant details."
 
 tokenizer, model, image_processor = load_model_once(model_path, conv_mode)
 
