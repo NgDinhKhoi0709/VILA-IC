@@ -3,7 +3,7 @@ import json
 from natsort import natsorted
 from llava.eval.run_vila import main, load_model_once
 
-base_folder = '/kaggle/input/festival-fol2'
+base_folder = '/kaggle/input/festival-fol3'
 output_folder = '/kaggle/working/output'
 model_path = 'Efficient-Large-Model/VILA1.5-3b'
 conv_mode = 'vicuna_v1'
