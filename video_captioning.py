@@ -1,51 +1,43 @@
 import os
 import json
+import argparse
 from natsort import natsorted
 from llava.eval.run_vila import main, load_model_once
 
-base_folder = '/kaggle/input/festival-fol3'
-output_folder = '/kaggle/working/output'
+# Set up argument parsing for the input video file
+parser = argparse.ArgumentParser(description="Process a video file and generate festival descriptions.")
+parser.add_argument('--video', type=str, required=True, help='Path to the input video file')
+
+args = parser.parse_args()
+
+# Get the path to the video file from arguments
+video_path = args.video
+output_folder = '/kaggle/working/output'  # Fixed output folder
 model_path = 'Efficient-Large-Model/VILA1.5-3b'
 conv_mode = 'vicuna_v1'
 query = "<video>\n Please describe the video in detail, focusing on the setting, activities, traditional costumes, decorations, cultural symbols, and any performances or rituals that indicate a festival or celebration."
 
 tokenizer, model, image_processor = load_model_once(model_path, conv_mode)
 
-# Get the list of subfolders and sort them naturally
-subfolders = natsorted(os.listdir(base_folder))
+# Process the video file
+output_text = main(
+    model_path=model_path,
+    video_file=video_path,
+    query=query,
+    conv_mode=conv_mode,
+    tokenizer=tokenizer, 
+    model=model, 
+    image_processor=image_processor
+)
 
-# Loop through each sorted subfolder
-for subfolder in subfolders:
-    subfolder_path = os.path.join(base_folder, subfolder)
-    
-    if os.path.isdir(subfolder_path):
-        # Prepare to collect results for this subfolder
-        subfolder_results = {}
-        
-        # Get the list of image files and sort them naturally
-        image_files = natsorted(os.listdir(subfolder_path))
+# Save the result to a JSON file
+if output_text:
+    # Define the JSON file path based on the video file name
+    video_filename = os.path.basename(video_path)
+    json_file_path = os.path.join(output_folder, f'{video_filename}.json')
 
-        # Loop through each sorted image file in the subfolder
-        for image_file in image_files:
-            image_path = os.path.join(subfolder_path, image_file)
-
-            # Call the main function from run_vila.py to process the image
-            output_text = main(
-                model_path=model_path,
-                video_file=image_path,
-                query=query,
-                conv_mode=conv_mode,
-                tokenizer=tokenizer, 
-                model=model, 
-                image_processor=image_processor
-            )
-            
-            if output_text:
-                subfolder_results[image_file] = output_text.strip()  # Strip any extra whitespace
-            else:
-                print(f"Warning: No output for image {image_file}")
-        
-        
-        json_file_path = os.path.join(output_folder, f'{subfolder}.json')
-        with open(json_file_path, 'w') as json_file:
-            json.dump(subfolder_results, json_file, ensure_ascii=False, indent=4)
+    # Save the result in a JSON file
+    with open(json_file_path, 'w') as json_file:
+        json.dump({video_filename: output_text.strip()}, json_file, ensure_ascii=False, indent=4)
+else:
+    print(f"Warning: No output for video {video_path}")
