@@ -34,7 +34,7 @@ output_text = main(
 if output_text:
     # Define the JSON file path based on the video file name
     video_filename = os.path.basename(video_path)
-    json_file_path = os.path.join(output_folder, f'{video_filename}.json')
+    json_file_path = os.path.join(output_folder, 'video.json')
 
     # Save the result in a JSON file
     with open(json_file_path, 'w') as json_file:
