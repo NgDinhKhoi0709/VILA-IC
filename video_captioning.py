@@ -6,16 +6,20 @@ from llava.eval.run_vila import main, load_model_once
 
 # Set up argument parsing for the input video file
 parser = argparse.ArgumentParser(description="Process a video file and generate festival descriptions.")
-parser.add_argument('--video_path', type=str, required=True, help='Path to the input video file')
+parser.add_argument('--video_path', type=str, default='sample_videos/input.mp4', help='Path to the input video file')
+parser.add_argument('--output_path', type=str, default='/kaggle/working/output', help='Path to the output folder')
+parser.add_argument('--model_path', type=str, default='Efficient-Large-Model/VILA1.5-3b', help='Path to the model')
+parser.add_argument('--conv_mode', type=str, default='vicuna_v1', help='Conversation mode to use')
+parser.add_argument('--query', type=str, default='<video>\n Please describe the video in detail!', help='Query prompt to describe the video')
 
 args = parser.parse_args()
 
-# Get the path to the video file from arguments
+# Get values from the arguments
 video_path = args.video_path
-output_folder = '/kaggle/working/output'  # Fixed output folder
-model_path = 'Efficient-Large-Model/VILA1.5-3b'
-conv_mode = 'vicuna_v1'
-query = "<video>\n Please describe the video in detail!"
+output_folder = args.output_path
+model_path = args.model_path
+conv_mode = args.conv_mode
+query = args.query
 
 tokenizer, model, image_processor = load_model_once(model_path, conv_mode)
 
@@ -41,5 +45,6 @@ if output_text:
         json.dump({video_filename: output_text.strip()}, json_file, ensure_ascii=False, indent=4)
 else:
     print(f"Warning: No output for video {video_path}")
+
 
 
