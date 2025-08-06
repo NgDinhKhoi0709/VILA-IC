@@ -15,7 +15,7 @@ video_path = args.video
 output_folder = '/kaggle/working/output'  # Fixed output folder
 model_path = 'Efficient-Large-Model/VILA1.5-3b'
 conv_mode = 'vicuna_v1'
-query = "<video>\n Please describe the video in detail, focusing on the setting, activities, traditional costumes, decorations, cultural symbols, and any performances or rituals that indicate a festival or celebration."
+query = "<video>\n Please describe the video in detail!"
 
 tokenizer, model, image_processor = load_model_once(model_path, conv_mode)
 
@@ -41,3 +41,4 @@ if output_text:
         json.dump({video_filename: output_text.strip()}, json_file, ensure_ascii=False, indent=4)
 else:
     print(f"Warning: No output for video {video_path}")
+
