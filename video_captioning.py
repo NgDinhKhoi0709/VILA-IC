@@ -6,12 +6,12 @@ from llava.eval.run_vila import main, load_model_once
 
 # Set up argument parsing for the input video file
 parser = argparse.ArgumentParser(description="Process a video file and generate festival descriptions.")
-parser.add_argument('--video', type=str, required=True, help='Path to the input video file')
+parser.add_argument('--video_path', type=str, required=True, help='Path to the input video file')
 
 args = parser.parse_args()
 
 # Get the path to the video file from arguments
-video_path = args.video
+video_path = args.video_path
 output_folder = '/kaggle/working/output'  # Fixed output folder
 model_path = 'Efficient-Large-Model/VILA1.5-3b'
 conv_mode = 'vicuna_v1'
@@ -41,4 +41,5 @@ if output_text:
         json.dump({video_filename: output_text.strip()}, json_file, ensure_ascii=False, indent=4)
 else:
     print(f"Warning: No output for video {video_path}")
+
 
