@@ -1,8 +1,16 @@
 import os
 import json
 import argparse
+from functools import lru_cache
 from natsort import natsorted
 from llava.eval.run_vila import main, load_model_once
+
+# ---- Cache loader to avoid reloading checkpoint repeatedly ----
+@lru_cache(maxsize=None)
+def load_model_cached(model_path: str, conv_mode: str):
+    # load_model_once is called only the first time for each (model_path, conv_mode)
+    tokenizer, model, image_processor = load_model_once(model_path, conv_mode)
+    return tokenizer, model, image_processor
 
 # Set up argument parsing for the input video file
 parser = argparse.ArgumentParser(description="Process a video file and generate festival descriptions.")
@@ -12,7 +20,6 @@ parser.add_argument('--model_path', type=str, default='Efficient-Large-Model/VIL
 parser.add_argument('--conv_mode', type=str, default='vicuna_v1', help='Conversation mode to use')
 parser.add_argument('--query', type=str, default='<video>\n Please describe the video in detail!', help='Query prompt to describe the video')
 parser.add_argument('--file_name', type=str, default='video.json', help='Name of the output JSON file')
-
 args = parser.parse_args()
 
 # Get values from the arguments
@@ -23,7 +30,8 @@ conv_mode = args.conv_mode
 query = args.query
 file_name = args.file_name
 
-tokenizer, model, image_processor = load_model_once(model_path, conv_mode)
+# Load (cached) model; repeated calls won't reload the checkpoint
+tokenizer, model, image_processor = load_model_cached(model_path, conv_mode)
 
 # Process the video file
 output_text = main(
@@ -31,19 +39,16 @@ output_text = main(
     video_file=video_path,
     query=query,
     conv_mode=conv_mode,
-    tokenizer=tokenizer, 
-    model=model, 
+    tokenizer=tokenizer,
+    model=model,
     image_processor=image_processor
 )
 
 # Save the result to a JSON file
 if output_text:
-    # Define the JSON file path based on --file_name
     json_file_path = os.path.join(output_folder, file_name)
-
-    # Save the result in a JSON file
+    
     with open(json_file_path, 'w') as json_file:
         json.dump({file_name.split('_')[1].split('.')[0]: output_text.strip()}, json_file, ensure_ascii=False, indent=4)
 else:
     print(f"Warning: No output for video {video_path}")
-
