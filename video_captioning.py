@@ -1,20 +1,39 @@
-import os
-import json
-import argparse
+import os, json, argparse, multiprocessing as mp
 from functools import lru_cache
 from natsort import natsorted
 from tqdm import tqdm
-import transformers
+import transformers, torch
 
-# Tắt log của transformers
 transformers.logging.set_verbosity_error()
 
 from llava.eval.run_vila import main, load_model_once
 
+# ===== Globals cho worker =====
+G_FOLDER_PATH = G_MODEL_PATH = G_CONV_MODE = G_QUERY = None
+G_TOKENIZER = G_MODEL = G_IMAGE_PROCESSOR = None
+
+PRECISION = "fp16"  # default
+
 @lru_cache(maxsize=None)
-def load_model_cached(model_path: str, conv_mode: str):
+def _load_model_cached(model_path: str, conv_mode: str):
     tokenizer, model, image_processor = load_model_once(model_path, conv_mode)
+    # Apply precision
+    if PRECISION == "fp16":
+        model = model.half()
+    elif PRECISION == "bf16":
+        model = model.to(torch.bfloat16)
+    # fp32: do nothing
+    # Optional: enable TF32 on Ampere+
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
     return tokenizer, model, image_processor
+
+def _init_worker(folder_path, model_path, conv_mode, query, precision):
+    global G_FOLDER_PATH, G_MODEL_PATH, G_CONV_MODE, G_QUERY
+    global G_TOKENIZER, G_MODEL, G_IMAGE_PROCESSOR, PRECISION
+    G_FOLDER_PATH, G_MODEL_PATH, G_CONV_MODE, G_QUERY = folder_path, model_path, conv_mode, query
+    PRECISION = precision  # set for this worker before cache load
+    G_TOKENIZER, G_MODEL, G_IMAGE_PROCESSOR = _load_model_cached(G_MODEL_PATH, G_CONV_MODE)
 
 def extract_id_from_filename(file_name: str) -> str:
     try:
@@ -22,66 +41,59 @@ def extract_id_from_filename(file_name: str) -> str:
     except Exception:
         return os.path.splitext(file_name)[0]
 
-def chunks(lst, n):
-    """Chia list thành các chunk kích thước n"""
-    for i in range(0, len(lst), n):
-        yield lst[i:i + n]
+def _process_one(fname: str):
+    try:
+        video_file = os.path.join(G_FOLDER_PATH, fname)
+        out = main(
+            model_path=G_MODEL_PATH,
+            video_file=video_file,
+            query=G_QUERY,
+            conv_mode=G_CONV_MODE,
+            tokenizer=G_TOKENIZER,
+            model=G_MODEL,
+            image_processor=G_IMAGE_PROCESSOR
+        )
+        vid = extract_id_from_filename(fname)
+        return (vid, out.strip() if out else None)
+    except Exception:
+        return (extract_id_from_filename(fname), None)
 
-# ---- Argument parsing ----
-parser = argparse.ArgumentParser(description="Process videos in batches.")
-parser.add_argument('--folder_path', type=str, required=True, help='Path to folder containing videos')
-parser.add_argument('--output_path', type=str, default='/kaggle/working/output', help='Output folder')
-parser.add_argument('--model_path', type=str, default='Efficient-Large-Model/VILA1.5-3b', help='Model path')
-parser.add_argument('--conv_mode', type=str, default='vicuna_v1', help='Conversation mode')
-parser.add_argument('--query', type=str, default='<video>\n Please describe the video in detail!', help='Prompt')
-parser.add_argument('--batch_size', type=int, default=1, help='Number of videos to process per batch')
-args = parser.parse_args()
+def main_entry():
+    p = argparse.ArgumentParser(description="Process videos (multiprocessing, fp16/bf16/fp32).")
+    p.add_argument('--folder_path', required=True)
+    p.add_argument('--output_path', default='/kaggle/working/output')
+    p.add_argument('--model_path', default='Efficient-Large-Model/VILA1.5-3b')
+    p.add_argument('--conv_mode', default='vicuna_v1')
+    p.add_argument('--query', default='<video>\n Please describe the video in detail!')
+    p.add_argument('--num_workers', type=int, default=max(1, (os.cpu_count() or 2)//2))
+    p.add_argument('--precision', choices=['fp16','bf16','fp32'], default='fp16')
+    args = p.parse_args()
 
-folder_path = args.folder_path
-output_folder = args.output_path
-model_path = args.model_path
-conv_mode = args.conv_mode
-query = args.query
-batch_size = args.batch_size
+    folder_path = args.folder_path
+    output_folder = args.output_path
 
-tokenizer, model, image_processor = load_model_cached(model_path, conv_mode)
+    exts = ('.mp4', '.mov', '.mkv', '.avi', '.webm')
+    files = natsorted([f for f in os.listdir(folder_path) if f.lower().endswith(exts)])
+    if not files:
+        print(f"No video files found in folder: {folder_path}")
+        return
 
-valid_exts = ('.mp4', '.mov', '.mkv', '.avi', '.webm')
-if not os.path.isdir(folder_path):
-    raise NotADirectoryError(f"Folder not found: {folder_path}")
+    with mp.Pool(
+        processes=max(1, args.num_workers),
+        initializer=_init_worker,
+        initargs=(folder_path, args.model_path, args.conv_mode, args.query, args.precision)
+    ) as pool:
+        it = pool.imap_unordered(_process_one, files, chunksize=1)
+        results = {}
+        for vid, text in tqdm(it, total=len(files), desc=f"Processing {os.path.basename(folder_path)}", unit="video"):
+            if text is not None:
+                results[vid] = text
 
-file_names = [f for f in os.listdir(folder_path) if f.lower().endswith(valid_exts)]
-file_names = natsorted(file_names)
+    os.makedirs(output_folder, exist_ok=True)
+    out_path = os.path.join(output_folder, f"{os.path.basename(os.path.normpath(folder_path))}.json")
+    with open(out_path, 'w', encoding='utf-8') as f:
+        json.dump(results, f, ensure_ascii=False, indent=4)
+    print(f"✅ Saved {len(results)} entries to: {out_path}")
 
-if not file_names:
-    print(f"No videos found in folder: {folder_path}")
-    exit(0)
-
-results = {}
-folder_name = os.path.basename(os.path.normpath(folder_path))
-
-for batch_files in tqdm(list(chunks(file_names, batch_size)), desc=f"Processing {folder_name}", unit="batch"):
-    for fname in batch_files:
-        video_file = os.path.join(folder_path, fname)
-        try:
-            output_text = main(
-                model_path=model_path,
-                video_file=video_file,
-                query=query,
-                conv_mode=conv_mode,
-                tokenizer=tokenizer,
-                model=model,
-                image_processor=image_processor
-            )
-            if output_text:
-                vid = extract_id_from_filename(fname)
-                results[vid] = output_text.strip()
-        except Exception as e:
-            print(f"Error processing {video_file}: {e}")
-
-os.makedirs(output_folder, exist_ok=True)
-json_file_path = os.path.join(output_folder, f"{folder_name}.json")
-with open(json_file_path, 'w', encoding='utf-8') as json_file:
-    json.dump(results, json_file, ensure_ascii=False, indent=4)
-
-print(f"✅ Saved {len(results)} entries to: {json_file_path}")
+if __name__ == "__main__":
+    main_entry()
