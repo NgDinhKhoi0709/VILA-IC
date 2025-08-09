@@ -43,6 +43,7 @@ if output_text:
 
     # Save the result in a JSON file
     with open(json_file_path, 'w') as json_file:
-        json.dump({os.path.basename(video_path): output_text.strip()}, json_file, ensure_ascii=False, indent=4)
+        json.dump({file_name.split('_')[1].split('.')[0]: output_text.strip()}, json_file, ensure_ascii=False, indent=4)
 else:
     print(f"Warning: No output for video {video_path}")
+
