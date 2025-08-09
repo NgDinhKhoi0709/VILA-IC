@@ -122,7 +122,7 @@ def main(model_path, video_file, query, conv_mode, tokenizer, model, image_proce
         model_base=None,
         image_file=None,
         video_file=video_file,
-        num_video_frames=32,
+        num_video_frames=8,
         query=query,
         conv_mode=conv_mode,
         sep=",",
@@ -135,4 +135,5 @@ def main(model_path, video_file, query, conv_mode, tokenizer, model, image_proce
 
 
     return eval_model(model, tokenizer, image_processor, args)
+
 
