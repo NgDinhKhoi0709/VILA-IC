@@ -5,6 +5,7 @@ from functools import lru_cache
 from natsort import natsorted
 from tqdm import tqdm
 import transformers
+import torch
 
 # Tắt log của transformers để model không spam output
 transformers.logging.set_verbosity_error()
@@ -13,8 +14,20 @@ from llava.eval.run_vila import main, load_model_once
 
 # ---- Cache loader to avoid reloading checkpoint repeatedly ----
 @lru_cache(maxsize=None)
-def load_model_cached(model_path: str, conv_mode: str):
+def load_model_cached(model_path: str, conv_mode: str, precision: str):
     tokenizer, model, image_processor = load_model_once(model_path, conv_mode)
+
+    # Chuyển precision
+    if precision == "fp16":
+        model = model.half()
+    elif precision == "bf16":
+        model = model.to(torch.bfloat16)
+    # fp32: giữ nguyên
+
+    # Bật TF32 nếu GPU hỗ trợ
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
     return tokenizer, model, image_processor
 
 def extract_id_from_filename(file_name: str) -> str:
@@ -32,6 +45,8 @@ parser.add_argument('--output_path', type=str, default='/kaggle/working/output',
 parser.add_argument('--model_path', type=str, default='Efficient-Large-Model/VILA1.5-3b', help='Path to the model')
 parser.add_argument('--conv_mode', type=str, default='vicuna_v1', help='Conversation mode to use')
 parser.add_argument('--query', type=str, default='<video>\n Please describe the video in detail!', help='Query prompt to describe the video')
+parser.add_argument('--precision', choices=['fp16', 'bf16', 'fp32'], default='fp16',
+                    help='Precision for model weights')
 args = parser.parse_args()
 
 # Get values from the arguments
@@ -40,9 +55,10 @@ output_folder = args.output_path
 model_path = args.model_path
 conv_mode = args.conv_mode
 query = args.query
+precision = args.precision
 
 # Load model (cache)
-tokenizer, model, image_processor = load_model_cached(model_path, conv_mode)
+tokenizer, model, image_processor = load_model_cached(model_path, conv_mode, precision)
 
 # Collect video files
 valid_exts = ('.mp4', '.mov', '.mkv', '.avi', '.webm')
