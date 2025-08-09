@@ -122,19 +122,20 @@ def main(model_path, video_file, query, conv_mode, tokenizer, model, image_proce
         model_base=None,
         image_file=None,
         video_file=video_file,
-        num_video_frames=6,
+        num_video_frames=8,
         query=query,
         conv_mode=conv_mode,
         sep=",",
         temperature=0.2,
         top_p=None,
         num_beams=1,
-        max_new_tokens=512,
-        min_new_tokens=0
+        max_new_tokens=300,
+        min_new_tokens=200
     )
 
 
     return eval_model(model, tokenizer, image_processor, args)
+
 
 
 
