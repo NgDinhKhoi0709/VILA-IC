@@ -96,6 +96,7 @@ def eval_model(model, tokenizer, image_processor, args):
             top_p=args.top_p,
             num_beams=args.num_beams,
             max_new_tokens=args.max_new_tokens,
+            min_new_tokens=getattr(args, "min_new_tokens", None),
             use_cache=True,
             stopping_criteria=[stopping_criteria],
         )
@@ -121,15 +122,17 @@ def main(model_path, video_file, query, conv_mode, tokenizer, model, image_proce
         model_base=None,
         image_file=None,
         video_file=video_file,
-        num_video_frames=6,
+        num_video_frames=32,
         query=query,
         conv_mode=conv_mode,
         sep=",",
         temperature=0.2,
         top_p=None,
         num_beams=1,
-        max_new_tokens=512
+        max_new_tokens=512,
+        min_new_tokens=280
     )
 
 
     return eval_model(model, tokenizer, image_processor, args)
+
