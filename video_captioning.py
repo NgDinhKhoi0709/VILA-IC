@@ -38,13 +38,14 @@ output_text = main(
 if output_text:
     # Define the JSON file path based on the video file name
     video_filename = os.path.basename(video_path)
-    json_file_path = os.path.join(output_folder, 'video.json')
+    json_file_path = os.path.join(output_folder, video_filename)
 
     # Save the result in a JSON file
     with open(json_file_path, 'w') as json_file:
         json.dump({video_filename: output_text.strip()}, json_file, ensure_ascii=False, indent=4)
 else:
     print(f"Warning: No output for video {video_path}")
+
 
 
 
