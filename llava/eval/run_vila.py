@@ -136,6 +136,26 @@ def main(model_path, video_file, query, conv_mode, tokenizer, model, image_proce
 
     return eval_model(model, tokenizer, image_processor, args)
 
+def main_image(model_path, image_file, query, conv_mode, tokenizer, model, image_processor):
+    """
+    Sinh mô tả cho 1 ảnh tĩnh (không phải video).
+    """
+    args = argparse.Namespace(
+        model_path=model_path if model_path else "Efficient-Large-Model/VILA-2.7b",
+        model_base=None,
+        image_file=image_file,   # <<< khác biệt quan trọng
+        video_file=None,         # <<< đảm bảo là None để eval_model hiểu là chế độ ảnh
+        num_video_frames=None,   # không dùng trong chế độ ảnh
+        query=query,
+        conv_mode=conv_mode,
+        sep=",",
+        temperature=0.2,
+        top_p=None,
+        num_beams=1,
+        max_new_tokens=512,
+        min_new_tokens=0
+    )
+    return eval_model(model, tokenizer, image_processor, args)
 
 
 
