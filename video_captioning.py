@@ -48,35 +48,83 @@ def run_image_mode(image_path: str,
                    model_path: str,
                    conv_mode: str,
                    query: str,
-                   precision: str):
-    """Suy luận trên 1 ảnh duy nhất."""
+                   precision: str,
+                   output_folder: str = "/kaggle/working/output"):
+    """
+    Suy luận trên 1 ảnh hoặc cả một thư mục ảnh.
+    - Nếu image_path là file: in kết quả ra STDOUT (như cũ).
+    - Nếu image_path là thư mục: quét tất cả ảnh và lưu 1 file JSON vào output_folder.
+    """
     if main_image is None:
         raise ImportError(
             "Không tìm thấy hàm main_image trong llava.eval.run_vila. "
             "Hãy mở run_vila.py và thêm hàm main_image(...) như hướng dẫn trước đó."
         )
 
-    if not os.path.isfile(image_path):
-        raise FileNotFoundError(f"Image not found: {image_path}")
-
-    # Kiểm tra đuôi ảnh hợp lệ (không bắt buộc nhưng giúp cảnh báo sớm)
     valid_img_exts = ('.jpg', '.jpeg', '.png', '.bmp', '.webp')
-    if not image_path.lower().endswith(valid_img_exts):
-        print(f"[!] Cảnh báo: {image_path} không có đuôi ảnh phổ biến {valid_img_exts}")
 
-    tokenizer, model, image_processor = load_model_cached(model_path, conv_mode, precision)
+    # Trường hợp: image_path là file ảnh đơn
+    if os.path.isfile(image_path):
+        if not image_path.lower().endswith(valid_img_exts):
+            print(f"[!] Cảnh báo: {image_path} không có đuôi ảnh phổ biến {valid_img_exts}")
 
-    output_text = main_image(
-        model_path=model_path,
-        image_file=image_path,
-        query=query,
-        conv_mode=conv_mode,
-        tokenizer=tokenizer,
-        model=model,
-        image_processor=image_processor
-    )
-    # In ra STDOUT để dễ redirect
-    print(output_text.strip() if output_text else "")
+        tokenizer, model, image_processor = load_model_cached(model_path, conv_mode, precision)
+        output_text = main_image(
+            model_path=model_path,
+            image_file=image_path,
+            query=query,
+            conv_mode=conv_mode,
+            tokenizer=tokenizer,
+            model=model,
+            image_processor=image_processor
+        )
+        print(output_text.strip() if output_text else "")
+        return
+
+    # Trường hợp: image_path là thư mục -> duyệt toàn bộ ảnh và lưu JSON
+    if os.path.isdir(image_path):
+        # Thu thập file ảnh
+        file_names = [f for f in os.listdir(image_path) if f.lower().endswith(valid_img_exts)]
+        file_names = natsorted(file_names)
+        if not file_names:
+            print(f"No image files found in folder: {image_path}")
+            return
+
+        # Load model (cache)
+        tokenizer, model, image_processor = load_model_cached(model_path, conv_mode, precision)
+
+        results = {}
+        for fname in tqdm(file_names, desc=f"Processing {os.path.basename(os.path.normpath(image_path))}", unit="image"):
+            img_file = os.path.join(image_path, fname)
+            try:
+                output_text = main_image(
+                    model_path=model_path,
+                    image_file=img_file,
+                    query=query,
+                    conv_mode=conv_mode,
+                    tokenizer=tokenizer,
+                    model=model,
+                    image_processor=image_processor
+                )
+                if output_text:
+                    pid = extract_id_from_filename(fname)
+                    results[pid] = output_text.strip()
+            except Exception as e:
+                print(f"Error processing {img_file}: {e}")
+
+        # Lưu JSON
+        os.makedirs(output_folder, exist_ok=True)
+        folder_name = os.path.basename(os.path.normpath(image_path))
+        json_file_path = os.path.join(output_folder, f"{folder_name}.json")
+        with open(json_file_path, 'w', encoding='utf-8') as json_file:
+            json.dump(results, json_file, ensure_ascii=False, indent=4)
+
+        print(f"✅ Saved {len(results)} entries to: {json_file_path}")
+        return
+
+    # Nếu không phải file cũng không phải thư mục
+    raise FileNotFoundError(f"Path not found: {image_path}")
+
 
 def run_video_folder_mode(folder_path: str,
                           output_folder: str,
@@ -152,7 +200,7 @@ def parse_args():
     )
     parser.add_argument(
         '--output_path', type=str, default='/kaggle/working/output',
-        help='Path to the output folder (video mode only)'
+        help='Path to the output folder'
     )
     # Model & config
     parser.add_argument(
@@ -187,7 +235,8 @@ def main():
             model_path=args.model_path,
             conv_mode=args.conv_mode,
             query=query,
-            precision=args.precision
+            precision=args.precision,
+            output_folder=args.output_path
         )
     else:
         # mode = video
@@ -206,3 +255,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
