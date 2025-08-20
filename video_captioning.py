@@ -7,17 +7,17 @@ from tqdm import tqdm
 import transformers
 import torch
 
+import os
+os.environ["TRANSFORMERS_NO_FLASH_ATTENTION"] = "1"  # Bảo Transformers né flash-attn
+os.environ["FLASH_ATTENTION_DISABLE"] = "1"          # Phòng trường hợp lib khác dò biến này
+
 # Tắt log của transformers để model không spam output
 transformers.logging.set_verbosity_error()
 
 # ---- Import các hàm cần dùng từ run_vila ----
 from llava.eval.run_vila import main as main_video
 from llava.eval.run_vila import load_model_once
-try:
-    # YÊU CẦU: bạn đã thêm hàm này trong run_vila.py theo hướng dẫn trước đó
-    from llava.eval.run_vila import main_image
-except Exception as _imp_err:
-    main_image = None  # sẽ kiểm tra và báo lỗi rõ ràng ở dưới
+from llava.eval.run_vila import main_image
 
 # ---- Cache loader để tránh load checkpoint nhiều lần ----
 @lru_cache(maxsize=None)
@@ -255,4 +255,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
